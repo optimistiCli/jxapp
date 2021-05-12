@@ -3,6 +3,13 @@
 ## Download
 Latest x86_64 binary: https://github.com/optimistiCli/jxapp/raw/latest_bin/bin/jxapp_x86_64.tar.gz
 
+### Downloading and installing
+```bash
+wget https://github.com/optimistiCli/jxapp/raw/latest_bin/bin/jxapp_x86_64.tar.gz
+tar xf jxapp_x86_64.tar.gz
+sudo mv -iv jxapp /usr/local/bin/
+```
+
 ## Build
 
 ### Prerequisites
