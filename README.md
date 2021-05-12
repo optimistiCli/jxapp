@@ -1,5 +1,25 @@
 # JXA Pre-Processor
 
+## Download
+Latest x86_64 binary: https://github.com/optimistiCli/jxapp/raw/latest_bin/bin/jxapp_x86_64.tar.gz
+
+## Build
+
+### Prerequisites
+  * macOS
+  * Xcode 12
+  * git
+  * swift 5.3+
+
+### Building and installing
+```bash
+git clone https://github.com/optimistiCli/jxapp.git
+cd jxapp
+./runtest.sh
+swift build -c release
+sudo cp -iv .build/release/jxapp /usr/local/bin/
+```
+
 ## Usage
 ```
 Usage:
