@@ -1,7 +1,9 @@
 # JXA Pre-Processor
 
 ## Download
-Latest x86_64 binary: https://github.com/optimistiCli/jxapp/raw/latest_bin/bin/jxapp_x86_64.tar.gz
+### Latest binaries
+  * [x86_64](https://github.com/optimistiCli/jxapp/raw/latest_bin/bin/jxapp_x86_64.tar.gz)
+  * [arm64](https://github.com/optimistiCli/jxapp/raw/latest_bin/bin/jxapp_arm64.tar.gz) Untested: I don't have access to apple silicon, alas :man_shrugging:
 
 ### Downloading and installing
 ```bash
