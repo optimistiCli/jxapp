@@ -1,313 +1,106 @@
 import Foundation
-
 import Iwstb
 
-class JxaPPParserError: Iwstb.Error {}
+class JXAPPParserError: IwstbError {}
 
-class JxaPPParser {
-    private struct _DDRe {
-        static let include: Regexer = Iwstb.cookRegexer(
-                //                 1                            2          3      4     5       6
-                #"^\s*//include(?:-(once))?(?:(?:\b(?:\s*(?:(?:"(.+)")|(?:'(.+)')|(\S+)|(.*))))|(.*))$"#)!
-        static let ifSetUnset: Regexer = Iwstb.cookRegexer(
-                //            1                                       2              3             4      5       6
-                #"^\s*//if-(?:(set)|(?:unset))(?:(?:\b(?:\s+(?:(?:"\$?(\S+)")|(?:'\$?(\S+)')|(?:\$?(\S+))|(.*))))|(.*))$"#)!
-        static let fiElse: Regexer = Iwstb.cookRegexer(
-                //         1                2       3
-                #"^\s*//(?:(fi)|(?:else))(?:(\s+\S)|(.))?"#)!
-    }
+class JXAPPParser {
+    private class _CodeBlock {
+        var processor: JXAPPLineProcessor
+        let poppers: Set<JXAPPDirective>?
 
-    private enum _Directive {
-        case include
-        case include_once
-        case if_set
-        case if_unset
-        case fi
-        case elseDirective
-    }
+        init(
+                processor aProcessor: JXAPPLineProcessor,
+                poppers aPoppers: Set<JXAPPDirective>?
+                ) {
+            self.processor = aProcessor
+            self.poppers = aPoppers
+        }
 
-    private struct _Detection {
-        let directive: _Directive
-        let workload: String
-
-        init(directive aDirective: _Directive, workload aWorkload: String = "") {
-            directive = aDirective
-            workload = aWorkload
+        @inlinable func process(
+                _ aLine: String,
+                in aContext: JXAPPContext
+                ) throws -> JXAPPLineProcessingResult {
+            return try processor.process(
+                    aLine,
+                    in: aContext,
+                    poppingOn: poppers
+                    )
         }
     }
 
-    private class _ParserStack {
-        private lazy var _array = [JxaPPParser]()
+    private class _CodeBlockStack {
+        private lazy var _array = [_CodeBlock]()
 
-        func setTopmost(_ aParser: JxaPPParser) {
-            push(aParser)
+        @inlinable func push(_ aCodeBlock: _CodeBlock) {
+            _array.append(aCodeBlock)
         }
 
-        func push(_ aParser: JxaPPParser) {
-            _array.append(aParser)
-        }
-
-        var innermost: JxaPPParser {
+        @inlinable var innermost: _CodeBlock {
             return _array.last!
         }
 
-        func pop() {
+        @inlinable func pop() {
             _array.removeLast()
         }
-    }
 
-    /* ***
-     * The wrapper object for contextual processor.
-     * 
-     * Should return false if the line was suffciently processed and parser
-     * should proceed to the next line. If true is returned then pasrer will
-     * call the processor with the same line again hence it's up to processor
-     * to update this var before returning true.
-     *
-     * The whole wrapper object debarcle is needed since swift compiler, in its 
-     * own words “cannot check reference equality of functions”, see onEof.
-     */
-    private class _Processor {
-        let process: (String) throws -> Bool
-        
-        init(_ aProcess:@escaping (String) throws -> Bool) {
-            process = aProcess
+        @inlinable var depth: Int {
+            _array.count
         }
     }
-    private lazy var _general = _Processor(_processGeneral)
-    private lazy var _satisfied = _Processor(_processSatisfied)
-    private lazy var _unsatisfied = _Processor(_processUnsatisfied)
-    private lazy var _processor = _general
 
-    private let _context: JxaPPContext
-    private let _selfStack: _ParserStack
-    private let _poppers: Set<_Directive>?
+    private let _context: JXAPPContext
+    private let _codeBlockStack: _CodeBlockStack
 
-    init(_ aContext: JxaPPContext) throws {
+    init(_ aContext: JXAPPContext) throws {
         _context = aContext
-        _selfStack = _ParserStack()
-        _poppers = nil
-
-        _selfStack.setTopmost(self)
+        _codeBlockStack = _CodeBlockStack()
+        _codeBlockStack.push(_CodeBlock(
+                processor: JXAPPLineProcessorShebangRemover.shared,
+                poppers: nil
+                ))
     }
 
-    private init(
-            within aEnclosing: JxaPPParser,
-            poppers aPoppers: Set<_Directive>
-            ) {
-        _context = aEnclosing._context
-        _selfStack = aEnclosing._selfStack
-        _poppers = aPoppers
-    }
-
-    /* ****
-     * aLine must be devoid of whitespaces on the right.
-     */
     func process(_ aLine: String) throws {
-        while try _selfStack.innermost._processor.process(aLine) {}
+        while try _processWorker(aLine) {}
+    }
+
+    /**
+     * Returns true if the same line should be processed again
+     */
+    @inlinable /* private */ func _processWorker(_ aLine: String) throws -> Bool {
+        let currentCodeBlock = _codeBlockStack.innermost
+        switch try currentCodeBlock.process(aLine, in: _context) {
+            case .noop:
+                return false
+            case .pop:
+                _codeBlockStack.pop()
+                return true
+            case let .replace(with: newProcessor):
+                currentCodeBlock.processor = newProcessor
+                return false
+            case let .retry(withReplacement: newProcessor):
+                currentCodeBlock.processor = newProcessor
+                return true
+            case let .push(
+                    startingWith: innerProcessor,
+                    untilPoppers: newPoppers,
+                    replacingWith: newProcessor
+                    ):
+                currentCodeBlock.processor = newProcessor
+                _codeBlockStack.push(_CodeBlock(
+                        processor: innerProcessor,
+                        poppers: newPoppers
+                        ))
+                return false
+            default:
+                // This can only be a result of a programming error
+                throw JXAPPParserError(because: "A closing fi directive is missing")
+        }
     }
 
     func onEof() throws {
-        if _selfStack.innermost._processor !== _selfStack.innermost._general {
-            throw JxaPPParserError(because: "A closing fi directive is missing")
-        }
-    }
-
-    private func _detectInclude(_ aLine: String) throws -> _Detection? {
-//        print("DEBUG: \(#function) aLine=\(aLine)")
-        if let matches = _DDRe.include.search(aLine) {
-//            print("DEBUG: \(matches)")
-            let gotGoodWorkload: Bool = !(matches[4].isEmpty && matches[2].isEmpty && matches[3].isEmpty)
-            let gotBadWorkload: Bool = !matches[5].isEmpty
-            let gotConjointSuspect: Bool = !matches[6].isEmpty
-            let gotOnce: Bool = !matches[1].isEmpty
-
-            if gotGoodWorkload {
-                return _Detection(
-                        directive: gotOnce
-                            ? .include_once
-                            : .include,
-                        workload: "\(matches[2])\(matches[3])\(matches[4])"
-                        )
-            } else if gotBadWorkload {
-                throw JxaPPParserError(because:
-                        "\(gotOnce ? "Include-once" : "Include") directive has strange path “\(aLine)”")
-            } else if gotConjointSuspect {
-                _context.warning(
-                        "Possibly missing a whitespace in an \(gotOnce ? "include-once" : "include") directive “\(aLine)”")
-                return nil
-            } else {
-                throw JxaPPParserError(because:
-                        "\(gotOnce ? "Include-once" : "Include") directive without path “\(aLine)”")
-            }
-        } else {
-            return nil
-        }
-    }
-
-    private func _detectIfSetUnset(_ aLine: String) throws -> _Detection? {
-        if let matches = _DDRe.ifSetUnset.search(aLine) {
-            let isUnset: Bool = matches[1].isEmpty
-            let gotGoodWorkload: Bool = !(matches[4].isEmpty && matches[2].isEmpty && matches[3].isEmpty)
-            let gotBadWorkload: Bool = !matches[5].isEmpty
-            let gotConjointSuspect: Bool = !matches[6].isEmpty
-
-            if gotGoodWorkload {
-                return _Detection(
-                        directive: isUnset
-                            ? .if_unset
-                            : .if_set
-                            ,
-                        workload: "\(matches[2])\(matches[3])\(matches[4])"
-                        )
-            } else {
-                let directiveName = isUnset
-                        ? "If-unset"
-                        : "If-set"
-                if gotBadWorkload {
-                    throw JxaPPParserError(because:
-                            "\(directiveName) directive references strange variable “\(aLine)”")
-                } else if gotConjointSuspect {
-                    _context.warning(
-                            "Possibly missing a whitespace in an \(directiveName) directive “\(aLine)”")
-                    return nil
-                } else {
-                    throw JxaPPParserError(because:
-                            "\(directiveName) directive without variable “\(aLine)”")
-                }
-            }
-        } else {
-            return nil
-        }
-    }
-
-    private func _detectFiElse(_ aLine: String) throws -> _Detection? {
-        if let matches = _DDRe.fiElse.search(aLine) {
-            let isElse: Bool = matches[1].isEmpty
-            let gotBadWorkload: Bool = !matches[2].isEmpty
-            let gotConjointSuspect: Bool = !matches[3].isEmpty
-
-            if gotBadWorkload {
-                throw JxaPPParserError(because:
-                        "\(isElse ? "Else" : "Fi") directive should have no parameters “\(aLine)”")
-            } else if gotConjointSuspect {
-                _context.warning(
-                        "Possibly a misspelled \(isElse ? "else" : "fi") directive “\(aLine)”")
-                return nil
-            } else {
-                return _Detection(directive: isElse
-                    ? .elseDirective
-                    : .fi
-                    )
-            }
-        } else {
-            return nil
-        }
-    }
-
-    /* ***
-     * Default context. Processes include, if-set and if-unset directives. Any
-     * other directive should produce an error. All if* directives cause both
-     * switching to another appropriate context and, if condition is satisfied,
-     * andcreation of a sub-parser via the self stack machinery. When it finds
-     * an if-closing directive a sub-parser pops itself from the self stack and
-     * returns control to the enclosing parser, alowing it to process the same
-     * line.
-     */
-    private func _processGeneral(_ aLine: String) throws -> Bool {
-        if let detection = try _detectInclude(aLine)
-                ?? _detectIfSetUnset(aLine)
-                ?? _detectFiElse(aLine) {
-            if let poppers = _poppers, poppers.contains(detection.directive) {
-                // Time to pop self and hand back control to enclosing parser
-                _selfStack.pop()
-                return true
-            }
-            switch detection.directive {
-                case .include:
-                    let url = _context.cookJxaUrl(detection.workload)
-                    try _context.processJxa(url)
-                    return false
-                case .include_once:
-                    let url = _context.cookJxaUrl(detection.workload)
-                    if !_context.wasOnceIncluded(url) {
-                        _context.declareOnceIncluded(url)
-                        try _context.processJxa(url)
-                    }
-                    return false
-                case .if_set:
-                    if ProcessInfo.processInfo.environment[detection.workload] == nil {
-                        _processor = _unsatisfied
-                        return false
-                    } else {
-                        _processor = _satisfied
-                        _selfStack.push(JxaPPParser(within: self, poppers: [.elseDirective, .fi]))
-                        return false
-                    }
-                case .if_unset:
-                    if ProcessInfo.processInfo.environment[detection.workload] == nil {
-                        _processor = _satisfied
-                        _selfStack.push(JxaPPParser(within: self, poppers: [.elseDirective, .fi]))
-                        return false
-                    } else {
-                        _processor = _unsatisfied
-                        return false
-                    }
-                default:
-                    throw JxaPPParserError(because:
-                            "Unexpected directive in general context “\(aLine)”")
-            }
-        } else {
-            try _context.out(aLine)
-            return false
-        }
-    }
-
-    /* ***
-     * Waits while an inner parser goes thru a block. Basically it only
-     * processes if-ending directives, anything else causes an error.
-     */
-    private func _processSatisfied(_ aLine: String) throws -> Bool {
-        if let detection = try _detectFiElse(aLine) {
-            switch detection.directive {
-                case .fi:
-                    _processor = _general
-                    return false
-                case .elseDirective:
-                    _processor = _unsatisfied
-                    return false
-                default:
-                    // We shouldn't ever get here so it's a programing error
-                    throw JxaPPParserError(because:
-                            "Unexpected directive in satisfied context “\(aLine)”")
-            }
-        } else {
-            return false
-        }
-    }
-
-    /* ***
-     * Goes thru blocks that shouldn't get in the output. Basically does
-     * nothing, just waits for an if-ending directive to switch to general
-     * context
-     */
-    private func _processUnsatisfied(_ aLine: String) throws -> Bool {
-        if let detection = try _detectFiElse(aLine) {
-            switch detection.directive {
-                case .fi:
-                    _processor = _general
-                    return false
-                case .elseDirective:
-                    _processor = _satisfied
-                    _selfStack.push(JxaPPParser(within: self, poppers: [.elseDirective, .fi]))
-                    return false
-                default:
-                    // We shouldn't ever get here so it's a programing error
-                    throw JxaPPParserError(because:
-                            "Unexpected directive in unsatisfied context “\(aLine)”")
-            }
-        } else {
-            return false
+        if _codeBlockStack.innermost.processor.id != JXAPPLineProcessorGeneral.shared.id {
+            throw JXAPPParserError(because: "A closing fi directive is missing")
         }
     }
 }

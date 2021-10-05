@@ -1,0 +1,1 @@
+export OSASCRIPT="$(which osascript)"

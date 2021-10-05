@@ -1,4 +1,4 @@
-// swift-tools-version:5.3
+// swift-tools-version:5.4
 
 import PackageDescription
 
@@ -9,9 +9,9 @@ let package = Package(
         .executable(name: "jxapp", targets: ["Main"])
     ],
     dependencies: [
-        .package(name: "Iwstb", url: "https://github.com/optimistiCli/iwstb.git", from: "0.1.2"),
+        .package(name: "Iwstb", url: "https://github.com/optimistiCli/iwstb.git", .branch("for_0_1_5")),
     ],
     targets: [
-        .target(name: "Main", dependencies: ["Iwstb"], path: "Sources"),
+        .executableTarget(name: "Main", dependencies: ["Iwstb"], path: "Sources"),
     ]
 )
