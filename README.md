@@ -2,8 +2,8 @@
 
 ## Download
 ### Latest binaries
-  * [x86_64](https://github.com/optimistiCli/jxapp/raw/latest_bin/bin/jxapp_x86_64.tar.gz)
-  * [arm64](https://github.com/optimistiCli/jxapp/raw/latest_bin/bin/jxapp_arm64.tar.gz) Untested: I don't have access to apple silicon
+  * [x86_64](https://github.com/optimistiCli/jxapp/raw/latest_bin/bin/jxapp_1.0.0_x86_64.tar.gz)
+  * [arm64](https://github.com/optimistiCli/jxapp/raw/latest_bin/bin/jxapp_1.0.0_arm64.tar.gz) Untested: I don't have access to apple silicon
 
 ### Downloading and installing
 ```bash
