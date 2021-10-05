@@ -39,6 +39,7 @@ sudo cp -iv .build/release/jxapp /usr/local/bin/
 ## Use
 ```
 JXA pre-processor v.1.0.0
+JXA pre-processor v.1.0.0
 
 Usage:
   jxapp [-h] [-c [-s | -S <shebang> | -k]] [-n|-N]
@@ -52,20 +53,20 @@ Options:
   h - Show help and exit
   c - Compile mode, the resulting code is written to stdout
   e - Set the environment variable; if both equals sign and value are
-      ommited then the variable is set to default value of 1; if only the
+      ommited then the variable is set to default value of “1”; if only the
       value is ommited the variable is set to an empty string, but it is
       still considered set by the directives; this option can be specified
       multiple times
   E - Unset the environment variable; this option can be specified multiple
       times
   N - Use strict rules for environment variable names, only capital leters,
-      digits and _ are allowed, first character must not be a digit;
+      digits and “_” are allowed, first character must not be a digit;
       if ommited small letters are also allowed
   n - Use relaxed rules for environment variable names, all characters in
-      the portable charset except for = and NUL are allowed
+      the portable charset except for “=” and NUL are allowed
   s - Prepend compiled output with the default shebang:
         #!/usr/bin/env osascript -l JavaScript
-  S - Prepend compiled output with specified shebang; the #! prefix can
+  S - Prepend compiled output with specified shebang; the “#!” prefix can
       be ommited
   k - Keep shebang of the main JXA file; if it has no shebang then the
       default one is used
@@ -82,7 +83,7 @@ Running mode:
   is unset both while pre-processing and when the JXA script is run.
 
 Compiling mode:
-  When run with the -c option pre-processor prints the compiled JXA script to
+  When run with the -c option pre-processor prints the “compiled” JXA script to
   STDOUT. It can then be packaged and / or distributed.
 
   In compiling mode environment variable JXAPP_COMPILING is set and
@@ -146,7 +147,7 @@ Directives:
 
     The set directive assigns the environment variable with everithing after the
     equals sign sans leading and trailing blanks. If both equals sign and value
-    are ommited then the variable is assigned the default value of 1. If only
+    are ommited then the variable is assigned the default value of “1”. If only
     the value is ommited then the variable is set to an empty string, but it is
     still considered set by any following directives.
 
