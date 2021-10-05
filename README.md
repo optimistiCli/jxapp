@@ -39,7 +39,6 @@ sudo cp -iv .build/release/jxapp /usr/local/bin/
 ## Use
 ```
 JXA pre-processor v.1.0.0
-JXA pre-processor v.1.0.0
 
 Usage:
   jxapp [-h] [-c [-s | -S <shebang> | -k]] [-n|-N]
