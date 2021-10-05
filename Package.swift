@@ -9,7 +9,7 @@ let package = Package(
         .executable(name: "jxapp", targets: ["Main"])
     ],
     dependencies: [
-        .package(name: "Iwstb", url: "https://github.com/optimistiCli/iwstb.git", .branch("for_0_1_5")),
+        .package(name: "Iwstb", url: "https://github.com/optimistiCli/iwstb.git", from: "0.1.5"),
     ],
     targets: [
         .executableTarget(name: "Main", dependencies: ["Iwstb"], path: "Sources"),
